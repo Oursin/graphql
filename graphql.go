@@ -173,21 +173,21 @@ func (c *Client) runMultipartRequestSpec(ctx context.Context, req *Request, resp
 	multipartRequestSpecQuery := req.fillMultipartRequestSpecQuery()
 	operations, err := json.Marshal(multipartRequestSpecQuery.Operations)
 	if err != nil {
-		return errors.Wrap(err, "marshal operations")
+		return fmt.Errorf("marshal: %w", err)
 	}
 	maps, err := json.Marshal(multipartRequestSpecQuery.Map)
 	if err != nil {
-		return errors.Wrap(err, "marshal map")
+		return fmt.Errorf("marshal map: %w", err)
 	}
 
 	if err := writer.WriteField("operations", string(operations)); err != nil {
-		return errors.Wrap(err, "write operation field")
+		return fmt.Errorf("write operation failed: %w", err)
 	} else {
 		c.logf(">> field: %s = %s", "operations", string(operations))
 	}
 
 	if err := writer.WriteField("map", string(maps)); err != nil {
-		return errors.Wrap(err, "write maps field")
+		return fmt.Errorf("write maps field: %w", err)
 	} else {
 		c.logf(">> field: %s = %s", "map", string(maps))
 	}
@@ -195,23 +195,23 @@ func (c *Client) runMultipartRequestSpec(ctx context.Context, req *Request, resp
 	for i := range req.files {
 		part, err := writer.CreateFormFile(req.files[i].Field, req.files[i].Name)
 		if err != nil {
-			return errors.Wrap(err, "create form file")
+			return fmt.Errorf("create form file: %w", err)
 		}
 		if _, err := io.Copy(part, req.files[i].R); err != nil {
-			return errors.Wrap(err, "preparing file")
+			return fmt.Errorf("preparing file: %w", err)
 		}
 
 		fieldName := req.files[i].Field
 		fieldValue := `@` + req.files[i].Name
 
 		if err := writer.WriteField(fieldName, fieldValue); err != nil {
-			return errors.Wrap(err, "write maps field")
+			return fmt.Errorf("write maps field: %w", err)
 		} else {
 			c.logf(">> field: %s = %s", fieldName, fieldValue)
 		}
 	}
 	if err := writer.Close(); err != nil {
-		return errors.Wrap(err, "close writer")
+		return fmt.Errorf("close write: %w", err)
 	}
 
 	req.body = requestBody
@@ -283,10 +283,14 @@ func (req *Request) fillMultipartRequestSpecQuery() multipartRequestSpecQuery {
 	query.Operations.Query = req.Query()
 	query.Map = make(map[string][]string)
 
+
 	for index, file := range req.Files() {
 		variables.Files = append(variables.Files, nil)
 
 		query.Map[file.Field] = []string{`variables.files.` + strconv.Itoa(index)}
+	}
+	if len(req.Files()) == 1 {
+		query.Map[req.Files()[0].Field] = []string{`variables.file`}
 	}
 
 	if len(req.Files()) > 0 {
